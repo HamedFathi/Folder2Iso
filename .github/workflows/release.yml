@@ -1,0 +1,95 @@
+name: Release
+
+# Push a version tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`)
+# to build all six binaries and publish them as a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: folder2iso
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: folder2iso/go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64, name: linux-amd64 }
+          - { goos: linux,   goarch: arm64, name: linux-arm64 }
+          - { goos: darwin,  goarch: amd64, name: macos-amd64 }
+          - { goos: darwin,  goarch: arm64, name: macos-arm64 }
+          - { goos: windows, goarch: amd64, name: windows-amd64 }
+          - { goos: windows, goarch: arm64, name: windows-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: folder2iso/go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          EXT=""; [ "$GOOS" = "windows" ] && EXT=".exe"
+          PKG="folder2iso-${VERSION}-${{ matrix.name }}"
+          mkdir -p "../dist/$PKG"
+          go build -buildvcs=false -trimpath \
+            -ldflags="-s -w -X main.version=${VERSION}" \
+            -o "../dist/$PKG/folder2iso${EXT}" .
+          cp ../README.md ../LICENSE ../CHANGELOG.md ../COMMANDS.md "../dist/$PKG/"
+          cd ../dist
+          if [ "$GOOS" = "windows" ]; then
+            zip -rq "$PKG.zip" "$PKG"
+          else
+            tar -czf "$PKG.tar.gz" "$PKG"
+          fi
+          rm -rf "$PKG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: folder2iso ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/*

@@ -1,0 +1,24 @@
+# Built executables and distribution archives (published via GitHub Releases)
+bin/
+dist/
+*.zip
+*.tar.gz
+folder2iso/folder2iso
+folder2iso/folder2iso.exe
+folder2iso/SHA256SUMS.txt
+*.exe
+# Generated images and temporary conversion state
+*.iso
+.folder2iso.lock
+.folder2iso-*/
+# Test/build output
+*.test
+*.out
+coverage/
+__pycache__/
+*.pyc
+# Local editor/OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
