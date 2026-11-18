@@ -315,10 +315,11 @@ func hostileTree(t *testing.T, src string) map[string]string {
 	files := map[string]string{
 		"Udemy - Course/5 - CCAR-F Domain 2 The Tool Layer/58. Different Workflows; Similar Principles.html": "user file",
 		"Udemy - Course/1 - Intro/01. Welcome.html":                                                          "plain",
-		"semi;dir;/a;b;c.txt":                   "semicolons in dir and file",
-		"emoji 😀 notes.txt":                     "supplementary plane",
-		strings.Repeat("L", 250) + ".txt":       "longer than UDF allows",
-		strings.Repeat("日", 140) + ".txt":       "longer than UDF wide allows",
+		"semi;dir;/a;b;c.txt":             "semicolons in dir and file",
+		"emoji 😀 notes.txt":               "supplementary plane",
+		strings.Repeat("L", 250) + ".txt": "longer than UDF allows",
+		// 129 wide runes exceed UDF's 127 but stay within Linux's 255-byte NAME_MAX.
+		"日" + strings.Repeat("ж", 124) + ".txt": "longer than UDF wide allows",
 		"日本;語.txt":                              "wide with semicolon",
 		"x;" + strings.Repeat("y", 70) + ".txt": "joliet long and semicolon",
 		"x_" + strings.Repeat("y", 70) + ".txt": "would collide with the above in Joliet",

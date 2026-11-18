@@ -14,6 +14,8 @@ go vet ./...
 
 For concurrency changes, run `CGO_ENABLED=1 go test -race ./...` on a supported platform with a C toolchain. For changes to image structures, use the independent-reader tests documented in [README.md](README.md#tests-and-validation). A passing encoder unit test alone does not establish interoperability.
 
+Tests that create real files must work on every host filesystem. Linux limits each path component to 255 UTF-8 bytes, while Windows allows 255 UTF-16 code units, so a long CJK name that works on Windows can fail in Linux CI. Keep on-disk test names within 255 bytes; use in-memory names to test longer inputs.
+
 ## Changes
 
 Keep pull requests focused. Describe the problem, the resulting behavior and the tests actually run. Update README.md and COMMANDS.md together for CLI changes. Add a regression test for a fixed defect when it provides meaningful coverage.
