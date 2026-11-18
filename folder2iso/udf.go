@@ -3,12 +3,9 @@ package main
 // Read-only UDF 1.02 bridge. All file payload extents are shared with ISO/Joliet.
 // Structures follow ECMA-167 (3rd edition) and OSTA UDF revision 1.02.
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -26,7 +23,7 @@ func udfEncode(s string) ([]byte, error) {
 	}
 	wide := false
 	for _, r := range s {
-		if r > 0xffff || r < 32 || r == 0xfeff || r >= 0xfffe || strings.ContainsRune("*/:;?\\", r) {
+		if !udfRuneOK(r) {
 			return nil, fmt.Errorf("character %q is not supported by this UDF 1.02 bridge", r)
 		}
 		if r > 255 {
@@ -47,46 +44,6 @@ func udfEncode(s string) ([]byte, error) {
 		return nil, fmt.Errorf("UDF name exceeds 255 encoded bytes (254 Latin-1 or 127 other BMP characters)")
 	}
 	return b, nil
-}
-func (p *imagePlan) assignJolietAliases() {
-	for _, d := range p.dirs {
-		used := map[string]bool{}
-		for _, n := range d.children {
-			if _, err := joliet(n.name); err == nil {
-				n.jolietName = n.name
-				used[strings.ToUpper(n.name)] = true
-			}
-		}
-		for _, n := range d.children {
-			if n.jolietName != "" {
-				continue
-			}
-			ext := ""
-			if !n.info.IsDir() {
-				ext = filepath.Ext(n.name)
-				if len([]rune(ext)) > 16 {
-					ext = ""
-				}
-			}
-			stem := []rune(strings.TrimSuffix(n.name, ext))
-			for attempt := 0; ; attempt++ {
-				sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", n.name, attempt)))
-				tail := fmt.Sprintf("~%x%s", sum[:6], ext)
-				limit := 64 - len([]rune(tail))
-				prefix := stem
-				if len(prefix) > limit {
-					prefix = prefix[:limit]
-				}
-				candidate := string(prefix) + tail
-				if !used[strings.ToUpper(candidate)] {
-					n.jolietName = candidate
-					used[strings.ToUpper(candidate)] = true
-					break
-				}
-			}
-			p.legacyAliases++
-		}
-	}
 }
 func (p *imagePlan) udfNodes() []*node {
 	n := append([]*node(nil), p.dirs...)

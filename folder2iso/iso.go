@@ -24,6 +24,7 @@ const maxBlocks = uint64(0xffffffff)
 type node struct {
 	path, name, alias string
 	jolietName        string
+	udfDisplay        string
 	udfName           []byte
 	udfFE, udfDir     uint32
 	udfDirLength      uint64
@@ -39,6 +40,7 @@ type node struct {
 type imagePlan struct {
 	udf                   *udfPlan
 	legacyAliases         int
+	renamed               []renamedEntry
 	root                  *node
 	dirs, files           []*node
 	pathSize              [2]uint32
@@ -68,7 +70,7 @@ func joliet(s string) ([]byte, error) {
 	}
 	var b []byte
 	for _, r := range s {
-		if r > 0xffff || r < 32 || strings.ContainsRune("*/:;?\\", r) {
+		if !jolietRuneOK(r) {
 			return nil, fmt.Errorf("character %q is not supported by Joliet", r)
 		}
 		b = append(b, byte(r>>8), byte(r))
@@ -154,18 +156,8 @@ func makePlanFormat(ctx context.Context, source string, excludes []string, forma
 			if info.Mode()&os.ModeSymlink != 0 || (!info.IsDir() && !info.Mode().IsRegular()) {
 				return nil, fmt.Errorf("unsupported symlink/special file: %s", file)
 			}
-			validate := joliet
-			if p.udf != nil {
-				validate = udfEncode
-			}
-			if _, err := validate(e.Name()); err != nil {
-				return nil, fmt.Errorf("%s: %w", file, err)
-			}
 			serial++
 			n := &node{path: file, name: e.Name(), info: info, parent: d, udfID: serial + 15}
-			if p.udf != nil {
-				n.udfName, _ = udfEncode(n.name)
-			}
 			if info.IsDir() {
 				if len(p.dirs) >= 65535 {
 					return nil, errors.New("ISO limit: at most 65,535 directories including root")
@@ -184,9 +176,9 @@ func makePlanFormat(ctx context.Context, source string, excludes []string, forma
 			d.children = append(d.children, n)
 		}
 	}
+	p.assignNames()
 	next := uint64(19)
 	if p.udf != nil {
-		p.assignJolietAliases()
 		next = udfPartition
 	}
 	for v := 0; v < 2; v++ {

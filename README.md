@@ -206,7 +206,9 @@ folder2iso batch --overwrite --format bridge
 
 UDF readers retain full names up to 254 Latin-1 characters, or 127 BMP characters if any character needs 16-bit encoding. Length includes the extension. Joliet readers retain names up to 64 characters; longer names appear as shortened aliases with a deterministic hash suffix. These aliases avoid collisions with existing short names and with each other. The summary reports how many names need this fallback. Basic ISO readers see generated ASCII aliases.
 
-`--format iso` omits UDF and rejects names over 64 characters, matching the old format. Neither choice guarantees compatibility with every reader, device, filename or image size. Already-existing images are still skipped in batch; `--overwrite` explicitly rebuilds them in the selected format.
+Names never fail a conversion. UDF keeps every name Windows can hold, including `;`, verbatim. Characters a namespace cannot store (emoji and other non-BMP characters, invalid UTF-8, control characters, U+FEFF/U+FFFE/U+FFFF, Windows-reserved `" * / : < > ? \ |`, and `;` in Joliet), Windows device names such as `CON`, trailing dots or spaces, over-length names and case-only collisions are replaced with `_`, shortened and given a deterministic hash suffix where needed. Each such entry is printed as a `WARN renamed` line and listed under `renamed_entries` in the JSON report.
+
+`--format iso` omits UDF; Joliet is then the only full-name view, so names over 64 characters or containing `;` get the same unique aliases and are reported as renamed. Neither choice guarantees compatibility with every reader, device, filename or image size. Already-existing images are still skipped in batch; `--overwrite` explicitly rebuilds them in the selected format.
 
 ## Minimal output and progress
 
@@ -294,7 +296,7 @@ folder2iso info --image "E:\Images\Photos.iso" --checksum --json
 
 Standalone `verify --image FILE --sha256 HEX` compares image bytes with a previously saved hash, not with a source tree. `info` identifies the UDF recognition marker as well as Joliet. `info` and standalone `verify` perform basic descriptor/size checks for this writer's unpartitioned ISO layout; they are not universal optical-disc validators. Readback can come from OS caches and is not a snapshot/interoperability guarantee.
 
-The text log is appended to and stores details/results without progress frames. JSON reports require a new path and never overwrite an existing file. Both must be outside source trees and distinct from image paths. Parent directories must exist unless created as the selected output directory. Reports include the selected format and per-image `legacy_name_aliases` counts, and preserve per-job statuses, full paths, counts, bytes, phase timings and hashes independently of the minimal console.
+The text log is appended to and stores details/results without progress frames. JSON reports require a new path and never overwrite an existing file. Both must be outside source trees and distinct from image paths. Parent directories must exist unless created as the selected output directory. Reports include the selected format, per-image `legacy_name_aliases` counts and `renamed_entries` (each renamed entry's source-relative `path` and on-disc `name`), and preserve per-job statuses, full paths, counts, bytes, phase timings and hashes independently of the minimal console.
 
 PowerShell verification from a report:
 
@@ -377,7 +379,7 @@ folder2iso limits
 
 ## Format limits
 
-Native ISO 9660 level 3 + standard Joliet + UDF 1.02 by default; no bootable media. Files over 4 GiB are supported. Image size is just under 8 TiB; directory count at most 65,535 including root. UDF names allow 254 Latin-1 or 127 other BMP characters; strict `--format iso` allows 64 BMP characters. No emoji, invalid UTF-8, control characters, U+FEFF/U+FFFE/U+FFFF or reserved `* / : ; ? \`. Unsupported entries cause explicit errors unless deliberately excluded. Host filesystem/free-space/path limits and reader compatibility still apply. There is no unlimited-size switch.
+Native ISO 9660 level 3 + standard Joliet + UDF 1.02 by default; no bootable media. Files over 4 GiB are supported. Image size is just under 8 TiB; directory count at most 65,535 including root. UDF names allow 254 Latin-1 or 127 other BMP characters; `--format iso` keeps 64 BMP characters. Names that cannot be stored are renamed with a warning instead of failing; symlinks and special files still cause explicit errors unless excluded. Host filesystem/free-space/path limits and reader compatibility still apply. There is no unlimited-size switch.
 
 ## Performance and storage
 
@@ -400,7 +402,7 @@ Images are staged beside their output and flushed before publication. Windows us
 | Everything is skipped | Batch skips existing output paths. Select `--overwrite` to deliberately recreate images. |
 | One folder failed | Fix the reported issue and run again. Completed images remain skipped. |
 | Long names appear shortened | The reader is using the ISO/Joliet view. Use a reader that supports the image's UDF filesystem for full names. |
-| A filename is rejected | Check `folder2iso limits`. Bridge mode still has encoding and length limits. Rename the entry or explicitly exclude it. |
+| A name shows `_` or a `~hash` suffix | The name could not be stored as-is (see `WARN renamed` lines or `renamed_entries` in `--report`). Rename the source entry if the on-disc name matters. |
 | Source changed during creation | Stop applications modifying the source and retry. |
 | Output is inside the source | Choose an output path beside or outside the source directory. |
 | No live progress | Redirected output intentionally has no progress. Use `--progress line` if your terminal wrapper is not detected. |
@@ -446,7 +448,7 @@ go vet ./...
 CGO_ENABLED=1 go test -race ./...
 ```
 
-Tests cover CLI defaults, relative paths, progress rendering, retries, exclusions, overwrite safety, logs/reports, cancellation, descriptor checksums and alias collisions. Optional independent readers are test tools only; they are not runtime dependencies:
+Tests cover CLI defaults, relative paths, progress rendering, retries, exclusions, overwrite safety, logs/reports, cancellation, descriptor checksums, alias collisions and filename legalisation. Hostile-name images are read back by built-in, writer-independent Joliet and UDF readers on every platform. To fuzz name handling: `go test -run XXX -fuzz FuzzNameLegalisation -fuzztime 60s .` Optional independent readers are test tools only; they are not runtime dependencies:
 
 ```sh
 # Requires xorriso on PATH for ISO/Joliet extraction tests.
@@ -461,7 +463,7 @@ FOLDER2ISO_UDF_TEST=1 FOLDER2ISO_LARGE_TEST=1 go test -v ./...
 
 Independent extraction was checked on Linux with xorriso and libudfread, including long Unicode names and a 4 GiB + 123-byte file. The large test needs over 12 GiB of logical temporary storage. A separate sparse 700 GiB test checks allocation-chain boundaries; it does not write or benchmark 700 GiB of payload.
 
-Linux tests, race detection and static checks passed for the supplied implementation. Windows/macOS binaries are cross-compiled; native Windows/macOS execution and real exFAT-mounted operation have not been tested in this environment. Compatibility with every optical-disc reader is not claimed.
+Linux tests, race detection and static checks passed for the supplied implementation. On Windows 11, the native test suite passed and an image with `;`, emoji and long names was mounted by Windows as UDF with the expected names. macOS binaries are cross-compiled; native macOS execution and real exFAT-mounted operation have not been tested. Compatibility with every optical-disc reader is not claimed.
 
 ## Contributing
 

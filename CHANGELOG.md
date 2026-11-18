@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Filenames no longer fail a conversion. UDF keeps `;` and every other name Windows can hold verbatim; names a namespace cannot store are sanitised, shortened and de-duplicated deterministically, printed as `WARN renamed` and listed under `renamed_entries` in JSON reports.
+- `--format iso` aliases long names instead of rejecting them.
+- Joliet aliases no longer inherit characters Joliet forbids.
+
 ## 1.0.0
 
 - Native Go encoder for ISO 9660 level 3, Joliet and UDF 1.02 bridge images.

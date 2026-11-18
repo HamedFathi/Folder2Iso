@@ -71,13 +71,15 @@ Batch skips existing same-name ISOs; rerun after fixing errors to create only mi
 Redirected output has no progress stream. Use --verbose for full details.
 Legacy --dir remains an alias for batch --source.
 `
+
 const formatLimits = `Default: ISO 9660 level 3 + standard Joliet + UDF 1.02 bridge (data, not bootable).
 Full names: UDF supports up to 254 Latin-1 characters, or 127 BMP characters
-when any character needs 16-bit encoding. No emoji, invalid UTF-8, control
-characters, U+FEFF/U+FFFE/U+FFFF, or * / : ; ? \. Unsupported names fail explicitly.
+when any character needs 16-bit encoding; ';' is kept. Names no namespace can
+store (emoji, invalid UTF-8, control or Windows-reserved characters, device names,
+over-length names) are renamed with a WARN line and listed in the JSON report.
 Joliet retains names up to 64 characters; longer names get unique compatibility
 aliases. ISO-only readers see generated ASCII aliases. Reader support varies.
---format iso omits UDF and rejects names exceeding 64 BMP characters.
+--format iso omits UDF; longer or ';' names then get Joliet aliases (reported).
 Files over 4 GiB supported. Image limit: just under 8 TiB including metadata.
 At most 65,535 directories including root. Host filesystem, free-space, OS path
 limits and metadata memory also apply. There is no unlimited mode.`
@@ -381,15 +383,19 @@ func runAt(parent context.Context, args []string, out io.Writer, currentDir stri
 			report.NotStarted++
 		}
 	}
-	aliases := 0
+	aliases, renamed := 0, 0
 	for _, r := range report.Results {
 		if r.Status == "created" || r.Status == "planned" {
 			aliases += r.LegacyAliases
+			renamed += len(r.Renamed)
 		}
 	}
 	note := ""
 	if aliases > 0 {
 		note = fmt.Sprintf(" | %d long names: UDF; legacy aliases", aliases)
+	}
+	if renamed > 0 {
+		note += fmt.Sprintf(" | %d renamed", renamed)
 	}
 	report.Duration = time.Since(report.Started).Seconds()
 	if o.mode == "create" && report.Created == 1 {

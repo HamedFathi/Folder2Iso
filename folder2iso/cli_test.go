@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,28 @@ func put(t *testing.T, p string, b []byte) {
 	if err := os.WriteFile(p, b, 0600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// putUnsupported creates an entry the writer must refuse (a symlink, or a
+// junction where unprivileged Windows cannot create symlinks). Filenames can
+// no longer be used for this: every name is now legalised instead of failing.
+func putUnsupported(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if os.Symlink(target, p) == nil {
+		return
+	}
+	if runtime.GOOS == "windows" {
+		if out, err := exec.Command("cmd", "/c", "mklink", "/J", p, target).CombinedOutput(); err == nil {
+			return
+		} else {
+			t.Logf("mklink: %v %s", err, out)
+		}
+	}
+	t.Skip("cannot create a symlink or junction")
 }
 func cli(t *testing.T, cwd string, args ...string) (int, string) {
 	t.Helper()
@@ -173,13 +196,15 @@ func TestSafetyAndOverwrite(t *testing.T) {
 		t.Fatal(out)
 	}
 	old, _ := os.ReadFile(image)
-	put(t, filepath.Join(src, strings.Repeat("x", 127)+"日"), []byte("invalid"))
+	putUnsupported(t, filepath.Join(src, "link"))
 	code, _ = cli(t, dir, "create", "--source", src, "--output", image, "--overwrite")
 	now, _ := os.ReadFile(image)
 	if code != 1 || !bytes.Equal(old, now) {
 		t.Fatal("damaged original")
 	}
-	os.Remove(filepath.Join(src, strings.Repeat("x", 127)+"日"))
+	if err := os.Remove(filepath.Join(src, "link")); err != nil {
+		t.Fatal(err)
+	}
 	put(t, filepath.Join(src, "file"), []byte("replacement"))
 	code, out = cli(t, dir, "create", "--source", src, "--output", image, "--overwrite")
 	if code != 0 {
@@ -348,9 +373,9 @@ func TestDefaultRetryOnlyCreatesMissingImages(t *testing.T) {
 	for _, name := range []string{"A-Good", "C-Good"} {
 		put(t, filepath.Join(dir, name, "file.txt"), []byte(name))
 	}
-	badName := strings.Repeat("x", 127) + "日"
-	badFile := filepath.Join(dir, "B-FixMe", badName)
-	put(t, badFile, []byte("retry payload"))
+	badFile := filepath.Join(dir, "B-FixMe", "link")
+	put(t, filepath.Join(dir, "B-FixMe", "payload.txt"), []byte("retry payload"))
+	putUnsupported(t, badFile)
 	code, out := cli(t, dir)
 	if code != 1 || !strings.Contains(out, "2 created") || !strings.Contains(out, "1 failed") {
 		t.Fatalf("initial run: %d %s", code, out)
@@ -375,12 +400,12 @@ func TestDefaultRetryOnlyCreatesMissingImages(t *testing.T) {
 		}
 		saved[file] = savedImage{data, info}
 	}
-	if err := os.Rename(badFile, filepath.Join(dir, "B-FixMe", "fixed.txt")); err != nil {
+	if err := os.Remove(badFile); err != nil {
 		t.Fatal(err)
 	}
 	// A finished source is deliberately no longer valid: its existing ISO must
 	// bypass scanning entirely, not merely avoid publication after doing the work.
-	put(t, filepath.Join(dir, "A-Good", badName), []byte("do not rescan"))
+	putUnsupported(t, filepath.Join(dir, "A-Good", "link"))
 	code, out = cli(t, dir)
 	if code != 0 || !strings.Contains(out, "1 created, 2 skipped") {
 		t.Fatalf("retry: %d %s", code, out)

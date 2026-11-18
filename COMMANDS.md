@@ -40,7 +40,9 @@ folder2iso batch --overwrite --format bridge
 
 UDF readers retain full names up to 254 Latin-1 characters, or 127 BMP characters if any character needs 16-bit encoding. Length includes the extension. Joliet readers retain names up to 64 characters; longer names appear as shortened aliases with a deterministic hash suffix. These aliases avoid collisions with existing short names and with each other. The summary reports how many names need this fallback. Basic ISO readers see generated ASCII aliases.
 
-`--format iso` omits UDF and rejects names over 64 characters, matching the old format. Neither choice guarantees compatibility with every reader, device, filename or image size. Already-existing images are still skipped in batch; `--overwrite` explicitly rebuilds them in the selected format.
+Names never fail a conversion. UDF keeps every name Windows can hold, including `;`, verbatim. Characters a namespace cannot store (emoji and other non-BMP characters, invalid UTF-8, control characters, U+FEFF/U+FFFE/U+FFFF, Windows-reserved `" * / : < > ? \ |`, and `;` in Joliet), Windows device names such as `CON`, trailing dots or spaces, over-length names and case-only collisions are replaced with `_`, shortened and given a deterministic hash suffix where needed. Each such entry is printed as a `WARN renamed` line and listed under `renamed_entries` in the JSON report.
+
+`--format iso` omits UDF; Joliet is then the only full-name view, so names over 64 characters or containing `;` get the same unique aliases and are reported as renamed. Neither choice guarantees compatibility with every reader, device, filename or image size. Already-existing images are still skipped in batch; `--overwrite` explicitly rebuilds them in the selected format.
 
 ## Minimal output and progress
 
@@ -128,7 +130,7 @@ folder2iso info --image "E:\Images\Photos.iso" --checksum --json
 
 Standalone `verify --image FILE --sha256 HEX` compares image bytes with a previously saved hash, not with a source tree. `info` identifies the UDF recognition marker as well as Joliet. `info` and standalone `verify` perform basic descriptor/size checks for this writer's unpartitioned ISO layout; they are not universal optical-disc validators. Readback can come from OS caches and is not a snapshot/interoperability guarantee.
 
-The text log is appended to and stores details/results without progress frames. JSON reports require a new path and never overwrite an existing file. Both must be outside source trees and distinct from image paths. Parent directories must exist unless created as the selected output directory. Reports include the selected format and per-image `legacy_name_aliases` counts, and preserve per-job statuses, full paths, counts, bytes, phase timings and hashes independently of the minimal console.
+The text log is appended to and stores details/results without progress frames. JSON reports require a new path and never overwrite an existing file. Both must be outside source trees and distinct from image paths. Parent directories must exist unless created as the selected output directory. Reports include the selected format, per-image `legacy_name_aliases` counts and `renamed_entries` (each renamed entry's source-relative `path` and on-disc `name`), and preserve per-job statuses, full paths, counts, bytes, phase timings and hashes independently of the minimal console.
 
 PowerShell verification from a report:
 
@@ -196,4 +198,4 @@ folder2iso limits
 
 ## Format limits
 
-Native ISO 9660 level 3 + standard Joliet + UDF 1.02 by default; no bootable media. Files over 4 GiB are supported. Image size is just under 8 TiB; directory count at most 65,535 including root. UDF names allow 254 Latin-1 or 127 other BMP characters; strict `--format iso` allows 64 BMP characters. No emoji, invalid UTF-8, control characters, U+FEFF/U+FFFE/U+FFFF or reserved `* / : ; ? \`. Unsupported entries cause explicit errors unless deliberately excluded. Host filesystem/free-space/path limits and reader compatibility still apply. There is no unlimited-size switch.
+Native ISO 9660 level 3 + standard Joliet + UDF 1.02 by default; no bootable media. Files over 4 GiB are supported. Image size is just under 8 TiB; directory count at most 65,535 including root. UDF names allow 254 Latin-1 or 127 other BMP characters; `--format iso` keeps 64 BMP characters. Names that cannot be stored are renamed with a warning instead of failing; symlinks and special files still cause explicit errors unless excluded. Host filesystem/free-space/path limits and reader compatibility still apply. There is no unlimited-size switch.

@@ -46,8 +46,12 @@ func TestBridgeNamesAndAliases(t *testing.T) {
 			t.Fatal("short name changed")
 		}
 	}
-	if _, err := makePlanFormat(context.Background(), src, nil, "iso"); err == nil {
-		t.Fatal("strict ISO accepted long names")
+	strict, err := makePlanFormat(context.Background(), src, nil, "iso")
+	if err != nil {
+		t.Fatal("ISO format must alias long names, not fail:", err)
+	}
+	if strict.legacyAliases != 3 || len(strict.renamed) != 3 {
+		t.Fatal("ISO format aliases", strict.legacyAliases, len(strict.renamed))
 	}
 	for _, name := range []string{strings.Repeat("x", 255), "日" + strings.Repeat("x", 127), "emoji😀"} {
 		if _, err := udfEncode(name); err == nil {

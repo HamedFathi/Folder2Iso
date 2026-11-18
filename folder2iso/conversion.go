@@ -14,25 +14,28 @@ import (
 )
 
 type result struct {
-	LegacyAliases int       `json:"legacy_name_aliases"`
-	Source        string    `json:"source"`
-	Output        string    `json:"output"`
-	Status        string    `json:"status"`
-	Error         string    `json:"error,omitempty"`
-	Files         int       `json:"files"`
-	Directories   int       `json:"directories"`
-	Excluded      int       `json:"excluded_entries"`
-	SourceBytes   uint64    `json:"source_bytes"`
-	ImageBytes    uint64    `json:"image_bytes"`
-	SHA256        string    `json:"sha256,omitempty"`
-	Started       time.Time `json:"started"`
-	Duration      float64   `json:"duration_seconds"`
-	Scan          float64   `json:"scan_seconds"`
-	Write         float64   `json:"write_seconds"`
-	Flush         float64   `json:"flush_seconds"`
-	Verify        float64   `json:"verify_seconds"`
-	Publish       float64   `json:"publish_seconds"`
+	LegacyAliases int            `json:"legacy_name_aliases"`
+	Renamed       []renamedEntry `json:"renamed_entries,omitempty"`
+	Source        string         `json:"source"`
+	Output        string         `json:"output"`
+	Status        string         `json:"status"`
+	Error         string         `json:"error,omitempty"`
+	Files         int            `json:"files"`
+	Directories   int            `json:"directories"`
+	Excluded      int            `json:"excluded_entries"`
+	SourceBytes   uint64         `json:"source_bytes"`
+	ImageBytes    uint64         `json:"image_bytes"`
+	SHA256        string         `json:"sha256,omitempty"`
+	Started       time.Time      `json:"started"`
+	Duration      float64        `json:"duration_seconds"`
+	Scan          float64        `json:"scan_seconds"`
+	Write         float64        `json:"write_seconds"`
+	Flush         float64        `json:"flush_seconds"`
+	Verify        float64        `json:"verify_seconds"`
+	Publish       float64        `json:"publish_seconds"`
 }
+
+const maxRenameWarnings = 20
 
 func convert(ctx context.Context, source, target string, out io.Writer) error {
 	o := options{progress: "none", interval: time.Second, bufferMiB: 4, label: "FOLDER2ISO", existing: "error"}
@@ -65,6 +68,14 @@ func runJob(ctx context.Context, j job, o options, sink *outputSink, prefix stri
 	r.Directories = len(p.dirs)
 	r.Excluded = p.excluded
 	r.LegacyAliases = p.legacyAliases
+	r.Renamed = p.renamed
+	for i, e := range p.renamed {
+		if i == maxRenameWarnings {
+			sink.line("%s WARN %d more entries renamed; use --report for the full list", prefix, len(p.renamed)-i)
+			break
+		}
+		sink.line("%s WARN renamed (name not storable on disc): %s -> %s", prefix, e.Path, e.Name)
+	}
 	r.SourceBytes = p.bytes
 	r.ImageBytes = uint64(p.blocks) * sector
 	sink.detail("%s %d files | %d directories | %d exclusions | source %s | image %s", prefix, r.Files, r.Directories, r.Excluded, humanBytes(r.SourceBytes), humanBytes(r.ImageBytes))
