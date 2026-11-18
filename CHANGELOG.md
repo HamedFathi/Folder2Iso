@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
 
 - Filenames no longer fail a conversion. UDF keeps `;` and every other name Windows can hold verbatim; names a namespace cannot store are sanitised, shortened and de-duplicated deterministically, printed as `WARN renamed` and listed under `renamed_entries` in JSON reports.
 - `--format iso` aliases long names instead of rejecting them.
